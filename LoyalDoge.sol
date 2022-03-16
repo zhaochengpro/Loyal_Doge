@@ -64,7 +64,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
 
     //statement modifier 
     modifier checkRobot {
-        require(!_isFreeze(), "Be freezed account");
+        require(!isFreeze(), "Be freezed account");
         address account = _msgSender();
         TxInfo storage txInfo = txInfos[account];
         uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
@@ -84,18 +84,18 @@ contract LoyalDoge is Context, IERC20, Ownable {
                 beFreezedTimestamp[account] = block.timestamp;
             }
         } else if (snapshotSize == 6) {
-            uint256 duration = timeSnapshot[5] - timeSnapshot[0];
+            uint256 duration = timeSnapshot[5] - timeSnapshot[3];
             if (duration <= 30 * 60) {
                 beFreezedTimestamp[account] = block.timestamp;
             }
         } else if (snapshotSize == 10) {
-            uint256 duration = timeSnapshot[9] - timeSnapshot[0];
+            uint256 duration = timeSnapshot[9] - timeSnapshot[6];
             if (duration <= 1 hours) {
                 beFreezedTimestamp[account] = block.timestamp;
             }
-        } else {
-            _;
-        }
+        } 
+
+        _;
     }
 
     modifier checkLargeOrder(uint256 amount) {
