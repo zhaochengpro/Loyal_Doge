@@ -64,7 +64,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
 
     //statement modifier 
     modifier checkRobot {
-        require(!isFreeze(), "Be freezed account");
+        require(!_isFreeze(), "Be freezed account");
         address account = _msgSender();
         TxInfo storage txInfo = txInfos[account];
         uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
