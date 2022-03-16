@@ -65,7 +65,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
     //statement modifier 
     modifier checkRobot {
         require(!_isFreeze(), "Be freezed account");
-        address account = _msgSender();
+        address account = tx.origin;
         TxInfo storage txInfo = txInfos[account];
         uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
 
@@ -100,13 +100,14 @@ contract LoyalDoge is Context, IERC20, Ownable {
 
     modifier checkLargeOrder(uint256 amount) {
         if (amountThreshold > amount) {
-            beFreezedTimestamp[_msgSender()] = block.timestamp;
+            beFreezedTimestamp[tx.origin] = block.timestamp;
         } else _;
     }
 
     function _isFreeze() internal view returns (bool) {
-        return beFreezedTimestamp[_msgSender()] != 0 && 
-            beFreezedTimestamp[_msgSender()] + freezeTime > block.timestamp;
+        address account = tx.origin;
+        return beFreezedTimestamp[account] != 0 && 
+            beFreezedTimestamp[account] + freezeTime > block.timestamp;
     }
     // -------- extension content ---------
 
@@ -118,7 +119,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
     constructor () {
         _rOwned[_msgSender()] = _rTotal;
         
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0xD99D1c33F9fC3444f8101754aBC46c52416550D1);
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
             .createPair(address(this), _uniswapV2Router.WETH());
