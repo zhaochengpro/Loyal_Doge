@@ -50,26 +50,34 @@ contract LoyalDoge is Context, IERC20, Ownable {
     // -------- extension content ---------
     // freeze time when address be block
     uint256 private _freezeTime = 2 hours;
+    // The Max amount of each transfer
     uint256 private _amountThreshold = 1000000000000000 * 10**9;
     
+    
     struct TxInfo {
-        uint256[10] timeSnapshot;
-        uint256 txCount;
+        uint256[10] timeSnapshot; // store the time point of each transfer. 
+        uint256 txCount; // the count of transfer
     }
     
     //mapping address to txInfo
     mapping(address => TxInfo) private _txInfos;
+    // store invalid account be freezed time
     mapping(address => uint256) private _beFreezedTimestamp;
+    // some addresses can't be freezed
     mapping(address => bool) private _whiteList;
 
     //statement modifier 
     modifier checkRobot {
+        // check is if account in white list
         if (!_isAddressInWhitelist()) {
+            // check if account be freezed 
             require(!_isFreeze(), "Be freezed account");
             address account = tx.origin;
             TxInfo storage txInfo = _txInfos[account];
             uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
 
+            // reset txInfo when the count of transfer greater than 10.
+            // else record transfer timestamp and increment count
             if (txInfo.txCount >= 10) {
                 txInfo.txCount = 1;
                 txInfo.timeSnapshot[0] = block.timestamp;
@@ -77,19 +85,23 @@ contract LoyalDoge is Context, IERC20, Ownable {
                 txInfo.timeSnapshot[txInfo.txCount] = block.timestamp;
                 txInfo.txCount += 1;
             }
+            
+            
             uint256 snapshotSize = txInfo.txCount;
-
             if (snapshotSize == 3) {
+                // do this section when the amount of transfer equal 3
                 uint256 duration = timeSnapshot[2] - timeSnapshot[0];
                 if (duration <= 15 * 60) {
                     _beFreezedTimestamp[account] = block.timestamp;
                 }
             } else if (snapshotSize == 6) {
+                // do this section when the amount of transfer equal 6
                 uint256 duration = timeSnapshot[5] - timeSnapshot[3];
                 if (duration <= 30 * 60) {
                     _beFreezedTimestamp[account] = block.timestamp;
                 }
             } else if (snapshotSize == 10) {
+                // do this section when the amount of transfer equal 10
                 uint256 duration = timeSnapshot[9] - timeSnapshot[6];
                 if (duration <= 1 hours) {
                     _beFreezedTimestamp[account] = block.timestamp;
@@ -107,20 +119,24 @@ contract LoyalDoge is Context, IERC20, Ownable {
         }
     }
 
+    // check if be freezed
     function _isFreeze() internal view returns (bool) {
         address account = tx.origin;
         return _beFreezedTimestamp[account] != 0 && 
             _beFreezedTimestamp[account] + _freezeTime > block.timestamp;
     }
 
+    // check if one account in white list
     function _isAddressInWhitelist() internal view returns (bool) {
         return _whiteList[tx.origin];
     }
 
+    // update the account status in white list
     function updateWhiteList(address account, bool included) external onlyOwner {
         _whiteList[account] = included;
     }
 
+    // set the Max amount of each transfer
     function setAmountThreshold(uint256 amount) external onlyOwner {
         _amountThreshold = amount;
     }
@@ -145,6 +161,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
         _isExcludedFromFee[_developmentAddress] = true;
         _isExcludedFromFee[_marketingAddress] = true;
 
+        // add some specific account to white list
         _whiteList[owner()] = true;
         _whiteList[address(this)] = true;
         _whiteList[_developmentAddress] = true;
