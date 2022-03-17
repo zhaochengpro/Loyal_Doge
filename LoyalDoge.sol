@@ -49,8 +49,8 @@ contract LoyalDoge is Context, IERC20, Ownable {
     
     // -------- extension content ---------
     // freeze time when address be block
-    uint256 private freezeTime = 2 hours;
-    uint256 private constant amountThreshold = 1000000000000000 * 10**9;
+    uint256 private _freezeTime = 2 hours;
+    uint256 private _amountThreshold = 1000000000000000 * 10**9;
     
     struct TxInfo {
         uint256[10] timeSnapshot;
@@ -58,57 +58,73 @@ contract LoyalDoge is Context, IERC20, Ownable {
     }
     
     //mapping address to txInfo
-    mapping(address => TxInfo) private txInfos;
-
-    mapping(address => uint256) private beFreezedTimestamp;
+    mapping(address => TxInfo) private _txInfos;
+    mapping(address => uint256) private _beFreezedTimestamp;
+    mapping(address => bool) private _whiteList;
 
     //statement modifier 
     modifier checkRobot {
-        require(!_isFreeze(), "Be freezed account");
-        address account = tx.origin;
-        TxInfo storage txInfo = txInfos[account];
-        uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
+        if (!_isAddressInWhitelist()) {
+            require(!_isFreeze(), "Be freezed account");
+            address account = tx.origin;
+            TxInfo storage txInfo = _txInfos[account];
+            uint256[10] storage timeSnapshot = txInfo.timeSnapshot;
 
-        if (txInfo.txCount >= 10) {
-            txInfo.txCount = 1;
-            txInfo.timeSnapshot[0] = block.timestamp;
-        } else {
-            txInfo.timeSnapshot[txInfo.txCount] = block.timestamp;
-            txInfo.txCount += 1;
+            if (txInfo.txCount >= 10) {
+                txInfo.txCount = 1;
+                txInfo.timeSnapshot[0] = block.timestamp;
+            } else {
+                txInfo.timeSnapshot[txInfo.txCount] = block.timestamp;
+                txInfo.txCount += 1;
+            }
+            uint256 snapshotSize = txInfo.txCount;
+
+            if (snapshotSize == 3) {
+                uint256 duration = timeSnapshot[2] - timeSnapshot[0];
+                if (duration <= 15 * 60) {
+                    _beFreezedTimestamp[account] = block.timestamp;
+                }
+            } else if (snapshotSize == 6) {
+                uint256 duration = timeSnapshot[5] - timeSnapshot[3];
+                if (duration <= 30 * 60) {
+                    _beFreezedTimestamp[account] = block.timestamp;
+                }
+            } else if (snapshotSize == 10) {
+                uint256 duration = timeSnapshot[9] - timeSnapshot[6];
+                if (duration <= 1 hours) {
+                    _beFreezedTimestamp[account] = block.timestamp;
+                }
+            } 
         }
-        uint256 snapshotSize = txInfo.txCount;
-
-        if (snapshotSize == 3) {
-            uint256 duration = timeSnapshot[2] - timeSnapshot[0];
-            if (duration <= 15 * 60) {
-                beFreezedTimestamp[account] = block.timestamp;
-            }
-        } else if (snapshotSize == 6) {
-            uint256 duration = timeSnapshot[5] - timeSnapshot[3];
-            if (duration <= 30 * 60) {
-                beFreezedTimestamp[account] = block.timestamp;
-            }
-        } else if (snapshotSize == 10) {
-            uint256 duration = timeSnapshot[9] - timeSnapshot[6];
-            if (duration <= 1 hours) {
-                beFreezedTimestamp[account] = block.timestamp;
-            }
-        } 
-
+        
         _;
     }
 
     modifier checkLargeOrder(uint256 amount) {
-        if (amountThreshold > amount) {
-            beFreezedTimestamp[tx.origin] = block.timestamp;
-        } else _;
+        _;
+        if (amount > _amountThreshold && !_isAddressInWhitelist()) {
+            _beFreezedTimestamp[tx.origin] = block.timestamp;
+        }
     }
 
     function _isFreeze() internal view returns (bool) {
         address account = tx.origin;
-        return beFreezedTimestamp[account] != 0 && 
-            beFreezedTimestamp[account] + freezeTime > block.timestamp;
+        return _beFreezedTimestamp[account] != 0 && 
+            _beFreezedTimestamp[account] + _freezeTime > block.timestamp;
     }
+
+    function _isAddressInWhitelist() internal view returns (bool) {
+        return _whiteList[tx.origin];
+    }
+
+    function updateWhiteList(address account, bool included) external onlyOwner {
+        _whiteList[account] = included;
+    }
+
+    function setAmountThreshold(uint256 amount) external onlyOwner {
+        _amountThreshold = amount;
+    }
+
     // -------- extension content ---------
 
     modifier lockTheSwap {
@@ -128,6 +144,11 @@ contract LoyalDoge is Context, IERC20, Ownable {
         _isExcludedFromFee[address(this)] = true;
         _isExcludedFromFee[_developmentAddress] = true;
         _isExcludedFromFee[_marketingAddress] = true;
+
+        _whiteList[owner()] = true;
+        _whiteList[address(this)] = true;
+        _whiteList[_developmentAddress] = true;
+        _whiteList[_marketingAddress] = true;
 
         emit Transfer(address(0x0000000000000000000000000000000000000000), _msgSender(), _tTotal);
     }
@@ -190,7 +211,7 @@ contract LoyalDoge is Context, IERC20, Ownable {
         emit Approval(owner, spender, amount);
     }
 
-    function _transfer(address from, address to, uint256 amount) private checkRobot checkLargeOrder(amount) {
+    function _transfer(address from, address to, uint256 amount) private checkLargeOrder(amount) checkRobot  {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
